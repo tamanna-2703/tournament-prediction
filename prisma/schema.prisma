@@ -1,0 +1,251 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-kysely"                        
+  output   = "../src/db"
+  fileName = "types.ts"
+ }
+
+
+
+datasource db {
+  provider = "postgresql"
+
+}
+
+/**
+*===============
+*ENUMS
+*===============
+*/
+
+ enum UserRole{
+  ADMIN
+  USER
+ }
+
+enum ContestStatus{
+  UPCOMING
+  LIVE
+  LOCKED
+  COMPLETED
+}
+
+enum MatchResult{
+  TEAM_A_WIN
+  TEAM_B_WIN
+  TIE
+  NO_RESULT
+}
+
+enum TransactionType{
+  CREDIT
+  DEBIT
+}
+
+enum TransactionReason{
+  CONTEST_ENTRY
+  PRIZE_WIN
+  NEW_USER_BONUS
+}
+
+
+/**
+*=================
+*USER & WALLET 
+*=================
+*/
+model User{
+  id     String    @id @default(cuid())
+  email  String    @unique
+  role   UserRole  @default(USER)
+
+
+wallet               Wallet?
+predictions          Prediction[]
+transactions         WalletTransaction[]
+leaderboardEntries LeaderboardEntry[]
+
+createdAt  DateTime  @default(now())
+updatedAt  DateTime  @updatedAt
+
+@@map("User")
+}
+
+model Wallet {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  balance  Int     @default(0)
+
+  user     User @relation(fields: [userId], references:[id])
+  transactions WalletTransaction[]
+
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("Wallet")
+}
+
+  model WalletTransaction{
+    id        String   @id @default(cuid())
+    userId    String
+    walletId  String
+  
+  amount    Int
+  type     TransactionType
+  reason TransactionReason
+
+  referenceId String?
+
+  user User @relation(fields: [userId], references:[id])
+  wallet Wallet @relation(fields:[walletId], references:[id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([walletId])
+  @@map("WalletTransaction")
+  }
+
+  /**
+  *=================
+  *SPORTS & TEAMS
+  *=================
+  */
+
+  model Sport{
+    id    String @id @default(cuid())
+    name  String @unique
+
+    tournaments Tournament[]
+    teams Team[]
+    @@map("Sport")
+  }
+
+model Team {
+  id String @id @default(cuid())
+  name String
+  sportId  String
+
+  sport Sport @relation(fields:[sportId], references:[id])
+  matchesAsTeamA Match[] @relation("TeamA")
+  matchesAsTeamB Match[] @relation("TeamB")
+
+  @@unique([name, sportId])
+  @@map("Team")
+}
+
+/**
+ * =========================
+ * TOURNAMENT / CONTEST / MATCH
+ * =========================
+ */
+
+ model Tournament {
+  id       String @id @default(cuid())
+  name     String
+  sportId  String
+  entryFee Int
+
+  sport    Sport     @relation(fields: [sportId], references: [id])
+  contests Contest[]
+
+  createdAt DateTime @default(now())
+  @@map("Tournament")
+}
+
+model Contest{
+  id    String @id @default(cuid())
+  tournamentId String
+
+  startTime DateTime 
+  endTime DateTime
+  status ContestStatus @default(UPCOMING)
+
+  prizePool Int @default(0)
+
+  tournament Tournament               @relation(fields:[tournamentId], references:[id])
+  matches Match[]
+  predictions  Prediction[]
+  leaderboard  LeaderboardEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@index([tournamentId]) 
+  @@map("Contest")
+}
+
+model Match{
+  id String @id @default(cuid())
+  contestId String
+
+  teamAId String
+  teamBId String
+
+  startTime DateTime
+  endTime DateTime?
+
+  result MatchResult?
+
+  contest Contest @relation(fields:[contestId], references:[id])
+
+  teamA Team @relation("TeamA", fields:[teamAId], references:[id])
+  
+  teamB Team  @relation("TeamB", fields:[teamBId], references:[id])
+
+  predictions Prediction[]
+
+  @@index([contestId])
+  @@map("Match")
+}
+
+/**
+ * =========================
+ * PREDICTIONS & LEADERBOARD
+ * =========================
+ */
+
+ model Prediction{
+  id String @id @default(cuid())
+  userId String
+  matchId String
+  contestId String
+
+  predictedResult MatchResult 
+  points Int @default(0)
+
+  user User @relation(fields:[userId], references:[id])
+ match Match @relation(fields:[matchId], references:[id])
+ contest Contest @relation(fields:[contestId], references:[id])
+
+ createdAt DateTime @default(now())
+
+ @@unique([userId, matchId])
+ @@index([contestId])
+
+ @@map("Prediction")
+ }
+
+ model LeaderboardEntry{
+  id  String @id @default(cuid())
+  contestId  String
+  userId String
+
+  score Int
+  rank Int
+  prize Int @default(0)
+
+  contest Contest @relation(fields:[contestId], references:[id])
+  user User @relation(fields:[userId], references:[id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([contestId, userId])
+  @@index([contestId])
+
+  @@map("LeaderboardEntry")
+ }
