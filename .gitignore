@@ -19,3 +19,5 @@ yarn-error.log*
 # OS / Editor files
 .DS_Store
 Thumbs.db
+
+API_TESTING_GUIDE.md 
